@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertPosSettingsSchema, insertPosOrderSchema, insertUserSessionSchema, type UserSession } from "@shared/schema";
 import axios from "axios";
 import jwt from "jsonwebtoken";
+import https from "https";
 
 interface AuthRequest extends Request {
   user?: UserSession;
@@ -37,6 +38,7 @@ class WooCommerceAPI {
         headers: this.getAuthHeaders(),
         params,
         timeout: 10000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
       return response.data;
     } catch (error) {
@@ -50,6 +52,7 @@ class WooCommerceAPI {
       const response = await axios.post(`${this.config.url}/wp-json/wc/v3${endpoint}`, data, {
         headers: this.getAuthHeaders(),
         timeout: 10000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
       return response.data;
     } catch (error) {
@@ -63,6 +66,7 @@ class WooCommerceAPI {
       const response = await axios.put(`${this.config.url}/wp-json/wc/v3${endpoint}`, data, {
         headers: this.getAuthHeaders(),
         timeout: 10000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
       return response.data;
     } catch (error) {
