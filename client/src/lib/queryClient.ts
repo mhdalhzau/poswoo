@@ -5,9 +5,11 @@ function getAuthToken(): string | null {
     const authData = localStorage.getItem('dreampos-auth');
     if (authData) {
       const parsed = JSON.parse(authData);
-      return parsed.state?.token || null;
+      // Try different paths where token might be stored
+      return parsed.state?.token || parsed.token || null;
     }
   } catch (e) {
+    console.error('Error getting auth token:', e);
     return null;
   }
   return null;
