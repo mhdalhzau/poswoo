@@ -53,6 +53,158 @@ const settingsSchema = z.object({
 
 type SettingsForm = z.infer<typeof settingsSchema>;
 
+function SyncDataSection() {
+  const { toast } = useToast();
+  const [isSyncingProducts, setIsSyncingProducts] = useState(false);
+  const [isSyncingCustomers, setIsSyncingCustomers] = useState(false);
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false);
+
+  const handleSyncProducts = async () => {
+    setIsSyncingProducts(true);
+    try {
+      const result = await woocommerce.syncProducts();
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "Products synced",
+        description: result.message || `Successfully synced ${result.count} products`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync products from WooCommerce",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingProducts(false);
+    }
+  };
+
+  const handleSyncCustomers = async () => {
+    setIsSyncingCustomers(true);
+    try {
+      const result = await woocommerce.syncCustomers();
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Customers synced",
+        description: result.message || `Successfully synced ${result.count} customers`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync customers from WooCommerce",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingCustomers(false);
+    }
+  };
+
+  const handleFetchOrders = async () => {
+    setIsFetchingOrders(true);
+    try {
+      const result = await woocommerce.fetchOrders();
+      toast({
+        title: "Orders fetched",
+        description: result.message || `Successfully fetched ${result.count} orders`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fetch failed",
+        description: error.message || "Failed to fetch orders from WooCommerce",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingOrders(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 rounded-lg border border-border bg-muted/50">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Products</h3>
+            <p className="text-xs text-muted-foreground">Sync all products from WooCommerce to local cache</p>
+          </div>
+          <Button
+            onClick={handleSyncProducts}
+            disabled={isSyncingProducts}
+            size="sm"
+            data-testid="sync-products-button"
+          >
+            {isSyncingProducts ? (
+              <RefreshCw size={16} className="animate-spin mr-2" />
+            ) : (
+              <RefreshCw size={16} className="mr-2" />
+            )}
+            {isSyncingProducts ? "Syncing..." : "Sync Products"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-lg border border-border bg-muted/50">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Customers</h3>
+            <p className="text-xs text-muted-foreground">Sync all customers from WooCommerce to local cache</p>
+          </div>
+          <Button
+            onClick={handleSyncCustomers}
+            disabled={isSyncingCustomers}
+            size="sm"
+            data-testid="sync-customers-button"
+          >
+            {isSyncingCustomers ? (
+              <RefreshCw size={16} className="animate-spin mr-2" />
+            ) : (
+              <RefreshCw size={16} className="mr-2" />
+            )}
+            {isSyncingCustomers ? "Syncing..." : "Sync Customers"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-lg border border-border bg-muted/50">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Orders</h3>
+            <p className="text-xs text-muted-foreground">Fetch latest orders from WooCommerce</p>
+          </div>
+          <Button
+            onClick={handleFetchOrders}
+            disabled={isFetchingOrders}
+            size="sm"
+            data-testid="fetch-orders-button"
+          >
+            {isFetchingOrders ? (
+              <RefreshCw size={16} className="animate-spin mr-2" />
+            ) : (
+              <RefreshCw size={16} className="mr-2" />
+            )}
+            {isFetchingOrders ? "Fetching..." : "Fetch Orders"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20">
+        <div className="flex items-start space-x-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">Sync Information</h4>
+            <p className="mt-1 text-xs text-blue-800 dark:text-blue-200">
+              Syncing may take time depending on your store size. Products and customers are cached locally for faster access. Orders are fetched in real-time and not cached.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("woocommerce");
   const [showConsumerKey, setShowConsumerKey] = useState(false);
@@ -533,15 +685,14 @@ export default function Settings() {
             <TabsContent value="sync">
               <Card>
                 <CardHeader>
-                  <CardTitle>FolderSync Settings</CardTitle>
-                  <p className="text-sm text-muted-foreground">Configure data synchronization preferences</p>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FolderSync size={20} />
+                    <span>Data Synchronization</span>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Sync data between POS and WooCommerce</p>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-center py-12 text-muted-foreground">
-                    <FolderSync size={48} className="mx-auto mb-4" />
-                    <p className="text-lg font-medium mb-2">FolderSync Configuration</p>
-                    <p className="text-sm">Data synchronization settings will be available here</p>
-                  </div>
+                <CardContent className="space-y-4">
+                  <SyncDataSection />
                 </CardContent>
               </Card>
             </TabsContent>

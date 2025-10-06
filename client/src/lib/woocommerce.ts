@@ -102,6 +102,26 @@ export class WooCommerceClient {
     if (!response.ok) throw new Error('Failed to fetch settings');
     return response.json();
   }
+
+  async syncProducts(): Promise<{ success: boolean; message: string; count: number }> {
+    const response = await apiRequest('POST', `${this.baseUrl}/products/sync`, {});
+    return response.json();
+  }
+
+  async syncCustomers(): Promise<{ success: boolean; message: string; count: number }> {
+    const response = await apiRequest('POST', `${this.baseUrl}/customers/sync`, {});
+    return response.json();
+  }
+
+  async fetchOrders(): Promise<{ success: boolean; message: string; orders: any[]; count: number }> {
+    const response = await apiRequest('POST', `${this.baseUrl}/orders/fetch`, {});
+    return response.json();
+  }
+
+  async updateProductStock(productId: number, quantity: number): Promise<any> {
+    const response = await apiRequest('PUT', `${this.baseUrl}/products/${productId}/stock`, { quantity });
+    return response.json();
+  }
 }
 
 export const woocommerce = new WooCommerceClient();

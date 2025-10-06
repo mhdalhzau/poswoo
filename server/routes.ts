@@ -692,6 +692,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fetch orders from WooCommerce
+  app.post("/api/orders/fetch", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const wcOrders = await wc.get('/orders', {
+        per_page: 50,
+        orderby: 'date',
+        order: 'desc',
+      });
+
+      res.json({ 
+        success: true, 
+        message: `Fetched ${wcOrders.length} orders from WooCommerce`,
+        orders: wcOrders,
+        count: wcOrders.length 
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch orders', error: error.message });
+    }
+  });
+
   // Sync unsynced orders to WooCommerce
   app.post("/api/orders/sync", requireAuth, async (req, res) => {
     try {
