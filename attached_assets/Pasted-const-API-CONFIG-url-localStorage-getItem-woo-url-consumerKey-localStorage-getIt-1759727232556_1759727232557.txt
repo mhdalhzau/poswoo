@@ -1,0 +1,100 @@
+const API_CONFIG = {
+  url: localStorage.getItem('woo_url') || '',
+  consumerKey: localStorage.getItem('woo_key') || '',
+  consumerSecret: localStorage.getItem('woo_secret') || '',
+};
+
+export const isConfigured = () => {
+  return API_CONFIG.url && API_CONFIG.consumerKey && API_CONFIG.consumerSecret;
+};
+
+export const setConfig = (url, key, secret) => {
+  API_CONFIG.url = url.replace(/\/$/, '');
+  API_CONFIG.consumerKey = key;
+  API_CONFIG.consumerSecret = secret;
+
+  localStorage.setItem('woo_url', API_CONFIG.url);
+  localStorage.setItem('woo_key', key);
+  localStorage.setItem('woo_secret', secret);
+};
+
+export const getConfig = () => {
+  return { ...API_CONFIG };
+};
+
+const makeRequest = async (endpoint, method = 'GET', data = null) => {
+  if (!isConfigured()) {
+    throw new Error('WooCommerce API belum dikonfigurasi');
+  }
+
+  const auth = btoa(`${API_CONFIG.consumerKey}:${API_CONFIG.consumerSecret}`);
+  const url = `${API_CONFIG.url}/wp-json/wc/v3${endpoint}`;
+
+  const options = {
+    method,
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (data && (method === 'POST' || method === 'PUT')) {
+    options.body = JSON.stringify(data);
+  }
+
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Network error' }));
+    throw new Error(error.message || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getProducts = async (params = {}) => {
+  const queryParams = new URLSearchParams({
+    per_page: 100,
+    status: 'publish',
+    ...params,
+  });
+  return makeRequest(`/products?${queryParams}`);
+};
+
+export const getProduct = async (id) => {
+  return makeRequest(`/products/${id}`);
+};
+
+export const updateProductStock = async (id, quantity) => {
+  return makeRequest(`/products/${id}`, 'PUT', {
+    stock_quantity: quantity,
+  });
+};
+
+export const createOrder = async (orderData) => {
+  return makeRequest('/orders', 'POST', orderData);
+};
+
+export const getOrders = async (params = {}) => {
+  const queryParams = new URLSearchParams({
+    per_page: 50,
+    ...params,
+  });
+  return makeRequest(`/orders?${queryParams}`);
+};
+
+export const updateOrder = async (id, data) => {
+  return makeRequest(`/orders/${id}`, 'PUT', data);
+};
+
+export const getCustomers = async (params = {}) => {
+  const queryParams = new URLSearchParams({
+    per_page: 100,
+    ...params,
+  });
+  return makeRequest(`/customers?${queryParams}`);
+};
+
+export const createCustomer = async (customerData) => {
+  return makeRequest('/customers', 'POST', customerData);
+};
