@@ -6,7 +6,9 @@ import {
   type CachedProduct,
   type CachedCustomer,
   type UserSession,
-  type InsertUserSession
+  type InsertUserSession,
+  type StockAdjustment,
+  type InsertStockAdjustment
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -28,6 +30,9 @@ export interface IStorage {
   getCachedProducts(limit?: number): Promise<CachedProduct[]>;
   getCachedProduct(id: number): Promise<CachedProduct | undefined>;
   setCachedProducts(products: CachedProduct[]): Promise<void>;
+  setCachedProduct(product: CachedProduct): Promise<void>;
+  updateCachedProduct(id: number, updates: Partial<CachedProduct>): Promise<void>;
+  deleteCachedProduct(id: number): Promise<void>;
   searchCachedProducts(query: string): Promise<CachedProduct[]>;
   getCachedProductBySku(sku: string): Promise<CachedProduct | undefined>;
 
@@ -35,6 +40,7 @@ export interface IStorage {
   getCachedCustomers(limit?: number): Promise<CachedCustomer[]>;
   getCachedCustomer(id: number): Promise<CachedCustomer | undefined>;
   setCachedCustomers(customers: CachedCustomer[]): Promise<void>;
+  setCachedCustomer(customer: CachedCustomer): Promise<void>;
   searchCachedCustomers(query: string): Promise<CachedCustomer[]>;
 
   // User Sessions
@@ -42,6 +48,10 @@ export interface IStorage {
   getUserSession(sessionToken: string): Promise<UserSession | undefined>;
   updateUserSession(id: string, session: Partial<UserSession>): Promise<UserSession>;
   deleteUserSession(sessionToken: string): Promise<void>;
+
+  // Stock Adjustments
+  recordStockAdjustment(adjustment: InsertStockAdjustment): Promise<StockAdjustment>;
+  getStockAdjustmentsByProduct(productId: number, limit?: number): Promise<StockAdjustment[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -50,6 +60,7 @@ export class MemStorage implements IStorage {
   private products: Map<number, CachedProduct> = new Map();
   private customers: Map<number, CachedCustomer> = new Map();
   private sessions: Map<string, UserSession> = new Map();
+  private stockAdjustments: Map<string, StockAdjustment> = new Map();
 
   // Settings
   async getPosSettings(): Promise<PosSettings | undefined> {
@@ -171,6 +182,22 @@ export class MemStorage implements IStorage {
     return Array.from(this.products.values()).find(product => product.sku === sku);
   }
 
+  async setCachedProduct(product: CachedProduct): Promise<void> {
+    this.products.set(product.id, product);
+  }
+
+  async updateCachedProduct(id: number, updates: Partial<CachedProduct>): Promise<void> {
+    const existing = this.products.get(id);
+    if (existing) {
+      const updated = { ...existing, ...updates };
+      this.products.set(id, updated);
+    }
+  }
+
+  async deleteCachedProduct(id: number): Promise<void> {
+    this.products.delete(id);
+  }
+
   // Cached Customers
   async getCachedCustomers(limit = 100): Promise<CachedCustomer[]> {
     return Array.from(this.customers.values()).slice(0, limit);
@@ -195,6 +222,10 @@ export class MemStorage implements IStorage {
       (customer.lastName && customer.lastName.toLowerCase().includes(searchTerm)) ||
       (customer.displayName && customer.displayName.toLowerCase().includes(searchTerm))
     );
+  }
+
+  async setCachedCustomer(customer: CachedCustomer): Promise<void> {
+    this.customers.set(customer.id, customer);
   }
 
   // User Sessions
@@ -235,6 +266,31 @@ export class MemStorage implements IStorage {
 
   async deleteUserSession(sessionToken: string): Promise<void> {
     this.sessions.delete(sessionToken);
+  }
+
+  // Stock Adjustments
+  async recordStockAdjustment(insertAdjustment: InsertStockAdjustment): Promise<StockAdjustment> {
+    const id = randomUUID();
+    const adjustment: StockAdjustment = {
+      ...insertAdjustment,
+      id,
+      sessionId: insertAdjustment.sessionId ?? null,
+      notes: insertAdjustment.notes ?? null,
+      createdAt: new Date(),
+    };
+    this.stockAdjustments.set(id, adjustment);
+    return adjustment;
+  }
+
+  async getStockAdjustmentsByProduct(productId: number, limit = 50): Promise<StockAdjustment[]> {
+    return Array.from(this.stockAdjustments.values())
+      .filter(adjustment => adjustment.productId === productId)
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, limit);
   }
 }
 

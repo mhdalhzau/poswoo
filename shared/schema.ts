@@ -152,6 +152,20 @@ export const userSessions = pgTable("user_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Stock Adjustments History
+export const stockAdjustments = pgTable("stock_adjustments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: integer("product_id").notNull(),
+  sessionId: varchar("session_id"),
+  username: text("username").notNull(),
+  adjustmentType: text("adjustment_type").notNull(),
+  quantityChange: integer("quantity_change").notNull(),
+  quantityBefore: integer("quantity_before").notNull(),
+  quantityAfter: integer("quantity_after").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertPosSettingsSchema = createInsertSchema(posSettings).omit({
   id: true,
   createdAt: true,
@@ -171,12 +185,19 @@ export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
   createdAt: true,
 });
 
+export const insertStockAdjustmentSchema = createInsertSchema(stockAdjustments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertPosSettings = z.infer<typeof insertPosSettingsSchema>;
 export type InsertPosOrder = z.infer<typeof insertPosOrderSchema>;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type InsertStockAdjustment = z.infer<typeof insertStockAdjustmentSchema>;
 
 export type PosSettings = typeof posSettings.$inferSelect;
 export type PosOrder = typeof posOrders.$inferSelect;
 export type CachedProduct = typeof cachedProducts.$inferSelect;
 export type CachedCustomer = typeof cachedCustomers.$inferSelect;
 export type UserSession = typeof userSessions.$inferSelect;
+export type StockAdjustment = typeof stockAdjustments.$inferSelect;

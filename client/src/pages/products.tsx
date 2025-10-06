@@ -18,15 +18,21 @@ import {
   Search, 
   Package, 
   Edit, 
-  Eye, 
+  Trash2,
   AlertTriangle,
   FolderSync,
-  Filter
+  Plus
 } from "lucide-react";
+import { ProductDialog } from "@/components/products/product-dialog";
+import { DeleteProductDialog } from "@/components/products/delete-product-dialog";
 
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
 
   const { data: products, isLoading, refetch } = useQuery({
     queryKey: ["/api/products", searchQuery, selectedCategory],
@@ -69,6 +75,23 @@ export default function Products() {
     return <Badge variant="secondary">Available</Badge>;
   };
 
+  const handleCreateProduct = () => {
+    setDialogMode("create");
+    setSelectedProduct(null);
+    setProductDialogOpen(true);
+  };
+
+  const handleEditProduct = (product: any) => {
+    setDialogMode("edit");
+    setSelectedProduct(product);
+    setProductDialogOpen(true);
+  };
+
+  const handleDeleteProduct = (product: any) => {
+    setSelectedProduct(product);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="products-page">
       {/* Header */}
@@ -79,13 +102,21 @@ export default function Products() {
         </div>
         <div className="flex items-center space-x-3">
           <Button
+            onClick={handleCreateProduct}
+            className="flex items-center space-x-2"
+            data-testid="create-product-button"
+          >
+            <Plus size={16} />
+            <span>Tambah Produk</span>
+          </Button>
+          <Button
             onClick={syncProducts}
             variant="outline"
             className="flex items-center space-x-2"
             data-testid="sync-products-button"
           >
             <FolderSync size={16} />
-            <span>FolderSync from WooCommerce</span>
+            <span>Sinkronisasi</span>
           </Button>
         </div>
       </div>
@@ -222,17 +253,19 @@ export default function Products() {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
-                            data-testid={`view-product-${product.id}`}
+                            onClick={() => handleEditProduct(product)}
+                            data-testid={`edit-product-${product.id}`}
                           >
-                            <Eye size={16} />
+                            <Edit size={16} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0"
-                            data-testid={`edit-product-${product.id}`}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteProduct(product)}
+                            data-testid={`delete-product-${product.id}`}
                           >
-                            <Edit size={16} />
+                            <Trash2 size={16} />
                           </Button>
                         </div>
                       </TableCell>
@@ -253,10 +286,16 @@ export default function Products() {
                           </p>
                         </div>
                         {!searchQuery && (
-                          <Button onClick={syncProducts} className="mt-4">
-                            <FolderSync size={16} className="mr-2" />
-                            FolderSync Products
-                          </Button>
+                          <div className="flex space-x-2 mt-4">
+                            <Button onClick={handleCreateProduct}>
+                              <Plus size={16} className="mr-2" />
+                              Tambah Produk
+                            </Button>
+                            <Button onClick={syncProducts} variant="outline">
+                              <FolderSync size={16} className="mr-2" />
+                              Sinkronisasi
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </TableCell>
@@ -267,6 +306,19 @@ export default function Products() {
           </div>
         </CardContent>
       </Card>
+
+      <ProductDialog
+        open={productDialogOpen}
+        onOpenChange={setProductDialogOpen}
+        product={selectedProduct}
+        mode={dialogMode}
+      />
+
+      <DeleteProductDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        product={selectedProduct}
+      />
     </div>
   );
 }

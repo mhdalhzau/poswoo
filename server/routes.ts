@@ -74,6 +74,21 @@ class WooCommerceAPI {
       throw error;
     }
   }
+
+  async delete(endpoint: string, params?: any) {
+    try {
+      const response = await axios.delete(`${this.config.url}/wp-json/wc/v3${endpoint}`, {
+        headers: this.getAuthHeaders(),
+        params,
+        timeout: 10000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      });
+      return response.data;
+    } catch (error) {
+      console.error('WooCommerce API Error:', error);
+      throw error;
+    }
+  }
 }
 
 // Middleware to check authentication
@@ -311,11 +326,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update product stock in WooCommerce
-  app.put("/api/products/:id/stock", requireAuth, async (req, res) => {
+  // Create product in WooCommerce
+  app.post("/api/products", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const productData = {
+        name: req.body.name,
+        type: req.body.type || 'simple',
+        regular_price: req.body.regularPrice,
+        sale_price: req.body.salePrice || '',
+        description: req.body.description || '',
+        short_description: req.body.shortDescription || '',
+        sku: req.body.sku || '',
+        manage_stock: req.body.manageStock !== undefined ? req.body.manageStock : true,
+        stock_quantity: req.body.stockQuantity || 0,
+        stock_status: req.body.stockStatus || 'instock',
+        categories: req.body.categories || [],
+        images: req.body.images || [],
+      };
+
+      const wcProduct = await wc.post('/products', productData);
+
+      const cachedProduct = {
+        id: wcProduct.id,
+        name: wcProduct.name,
+        slug: wcProduct.slug,
+        sku: wcProduct.sku,
+        price: wcProduct.price,
+        regularPrice: wcProduct.regular_price,
+        salePrice: wcProduct.sale_price,
+        onSale: wcProduct.on_sale,
+        status: wcProduct.status,
+        stockStatus: wcProduct.stock_status,
+        stockQuantity: wcProduct.stock_quantity,
+        manageStock: wcProduct.manage_stock,
+        categories: wcProduct.categories,
+        images: wcProduct.images,
+        weight: wcProduct.weight,
+        dimensions: wcProduct.dimensions,
+        shortDescription: wcProduct.short_description,
+        description: wcProduct.description,
+        lastSyncAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.setCachedProduct(cachedProduct);
+
+      res.json(wcProduct);
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create product', error: error.response?.data?.message || error.message });
+    }
+  });
+
+  // Update product in WooCommerce
+  app.put("/api/products/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const { quantity } = req.body;
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const productData: any = {};
+      if (req.body.name !== undefined) productData.name = req.body.name;
+      if (req.body.regularPrice !== undefined) productData.regular_price = req.body.regularPrice;
+      if (req.body.salePrice !== undefined) productData.sale_price = req.body.salePrice;
+      if (req.body.description !== undefined) productData.description = req.body.description;
+      if (req.body.shortDescription !== undefined) productData.short_description = req.body.shortDescription;
+      if (req.body.sku !== undefined) productData.sku = req.body.sku;
+      if (req.body.manageStock !== undefined) productData.manage_stock = req.body.manageStock;
+      if (req.body.stockQuantity !== undefined) productData.stock_quantity = req.body.stockQuantity;
+      if (req.body.stockStatus !== undefined) productData.stock_status = req.body.stockStatus;
+      if (req.body.categories !== undefined) productData.categories = req.body.categories;
+      if (req.body.images !== undefined) productData.images = req.body.images;
+
+      const wcProduct = await wc.put(`/products/${id}`, productData);
+
+      await storage.updateCachedProduct(parseInt(id), {
+        name: wcProduct.name,
+        slug: wcProduct.slug,
+        sku: wcProduct.sku,
+        price: wcProduct.price,
+        regularPrice: wcProduct.regular_price,
+        salePrice: wcProduct.sale_price,
+        onSale: wcProduct.on_sale,
+        status: wcProduct.status,
+        stockStatus: wcProduct.stock_status,
+        stockQuantity: wcProduct.stock_quantity,
+        manageStock: wcProduct.manage_stock,
+        categories: wcProduct.categories,
+        images: wcProduct.images,
+        weight: wcProduct.weight,
+        dimensions: wcProduct.dimensions,
+        shortDescription: wcProduct.short_description,
+        description: wcProduct.description,
+        updatedAt: new Date(),
+      });
+
+      res.json(wcProduct);
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update product', error: error.response?.data?.message || error.message });
+    }
+  });
+
+  // Delete product from WooCommerce
+  app.delete("/api/products/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { force = false } = req.query;
       
       const settings = await storage.getPosSettings();
       if (!settings) {
@@ -328,20 +463,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
         consumerSecret: settings.consumerSecret,
       });
 
+      await wc.delete(`/products/${id}`, { force });
+
+      await storage.deleteCachedProduct(parseInt(id));
+
+      res.json({ success: true, message: 'Product deleted successfully' });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to delete product', error: error.response?.data?.message || error.message });
+    }
+  });
+
+  // Update product stock in WooCommerce
+  app.put("/api/products/:id/stock", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { quantity } = req.body;
+      
+      const product = await storage.getCachedProduct(parseInt(id));
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const quantityBefore = product.stockQuantity || 0;
+      const quantityAfter = quantity;
+      const quantityChange = quantityAfter - quantityBefore;
+
       const updatedProduct = await wc.put(`/products/${id}`, {
         stock_quantity: quantity,
       });
 
-      // Update cache
       await storage.updateCachedProduct(parseInt(id), {
         stockQuantity: updatedProduct.stock_quantity,
         stockStatus: updatedProduct.stock_status,
         updatedAt: new Date(),
       });
 
+      await storage.recordStockAdjustment({
+        productId: parseInt(id),
+        sessionId: req.user?.id || null,
+        username: req.user?.username || 'System',
+        adjustmentType: 'set',
+        quantityChange,
+        quantityBefore,
+        quantityAfter,
+        notes: 'Manual stock update',
+      });
+
       res.json(updatedProduct);
     } catch (error) {
       res.status(500).json({ message: 'Failed to update product stock', error: error.message });
+    }
+  });
+
+  // Record stock adjustment
+  app.post("/api/products/:id/stock-adjustments", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { type, amount, notes } = req.body;
+
+      if (!['add', 'subtract'].includes(type)) {
+        return res.status(400).json({ message: 'Invalid adjustment type. Must be "add" or "subtract"' });
+      }
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ message: 'Amount must be greater than 0' });
+      }
+
+      const product = await storage.getCachedProduct(parseInt(id));
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      const quantityBefore = product.stockQuantity || 0;
+      const quantityChange = type === 'add' ? amount : -amount;
+      const quantityAfter = quantityBefore + quantityChange;
+
+      if (quantityAfter < 0) {
+        return res.status(400).json({ message: 'Stok tidak boleh negatif' });
+      }
+
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const updatedProduct = await wc.put(`/products/${id}`, {
+        stock_quantity: quantityAfter,
+      });
+
+      await storage.updateCachedProduct(parseInt(id), {
+        stockQuantity: updatedProduct.stock_quantity,
+        stockStatus: updatedProduct.stock_status,
+        updatedAt: new Date(),
+      });
+
+      await storage.recordStockAdjustment({
+        productId: parseInt(id),
+        sessionId: req.user?.id || null,
+        username: req.user?.username || 'Unknown',
+        adjustmentType: type,
+        quantityChange,
+        quantityBefore,
+        quantityAfter,
+        notes: notes || null,
+      });
+
+      res.json(updatedProduct);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to adjust stock', error: error.message });
+    }
+  });
+
+  // Get stock adjustment history
+  app.get("/api/products/:id/stock-adjustments", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { limit } = req.query;
+      
+      const adjustments = await storage.getStockAdjustmentsByProduct(
+        parseInt(id), 
+        limit ? parseInt(limit as string) : 50
+      );
+
+      res.json(adjustments);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get stock adjustment history', error: error.message });
     }
   });
 

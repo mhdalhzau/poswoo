@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Table,
   TableBody,
@@ -21,13 +22,26 @@ import {
   AlertTriangle,
   TrendingDown,
   FolderSync,
-  Filter,
-  Download
+  Download,
+  Edit,
+  Trash2,
+  History,
+  Activity
 } from "lucide-react";
+import { ProductDialog } from "@/components/products/product-dialog";
+import { DeleteProductDialog } from "@/components/products/delete-product-dialog";
+import { StockAdjustmentDialog } from "@/components/inventory/stock-adjustment-dialog";
+import { StockHistory } from "@/components/inventory/stock-history";
 
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stockAdjustmentDialogOpen, setStockAdjustmentDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
 
   const { data: products, isLoading, refetch } = useQuery({
     queryKey: ["/api/products"],
@@ -84,6 +98,27 @@ export default function Inventory() {
     lowStock: products?.filter(p => p.stockQuantity !== null && p.stockQuantity < 10).length || 0,
     outOfStock: products?.filter(p => p.stockStatus === 'outofstock').length || 0,
     inStock: products?.filter(p => p.stockStatus === 'instock').length || 0,
+  };
+
+  const handleEditProduct = (product: any) => {
+    setDialogMode("edit");
+    setSelectedProduct(product);
+    setProductDialogOpen(true);
+  };
+
+  const handleDeleteProduct = (product: any) => {
+    setSelectedProduct(product);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleStockAdjustment = (product: any) => {
+    setSelectedProduct(product);
+    setStockAdjustmentDialogOpen(true);
+  };
+
+  const handleViewHistory = (product: any) => {
+    setSelectedProduct(product);
+    setHistoryDialogOpen(true);
   };
 
   return (
@@ -215,6 +250,7 @@ export default function Inventory() {
                       <TableHead>Status</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Last Updated</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -232,6 +268,7 @@ export default function Inventory() {
                           <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                         </TableRow>
                       ))
                     ) : filteredProducts.length > 0 ? (
@@ -286,11 +323,55 @@ export default function Inventory() {
                               }
                             </p>
                           </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleStockAdjustment(product)}
+                                data-testid={`adjust-stock-${product.id}`}
+                                title="Adjustment Stok"
+                              >
+                                <Activity size={16} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleViewHistory(product)}
+                                data-testid={`view-history-${product.id}`}
+                                title="Lihat History"
+                              >
+                                <History size={16} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEditProduct(product)}
+                                data-testid={`edit-inventory-${product.id}`}
+                                title="Edit Produk"
+                              >
+                                <Edit size={16} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteProduct(product)}
+                                data-testid={`delete-inventory-${product.id}`}
+                                title="Hapus Produk"
+                              >
+                                <Trash2 size={16} />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12">
+                        <TableCell colSpan={7} className="text-center py-12">
                           <div className="flex flex-col items-center space-y-4">
                             <Package size={48} className="text-muted-foreground" />
                             <div>
@@ -313,6 +394,39 @@ export default function Inventory() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <ProductDialog
+        open={productDialogOpen}
+        onOpenChange={setProductDialogOpen}
+        product={selectedProduct}
+        mode={dialogMode}
+      />
+
+      <DeleteProductDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        product={selectedProduct}
+      />
+
+      <StockAdjustmentDialog
+        open={stockAdjustmentDialogOpen}
+        onOpenChange={setStockAdjustmentDialogOpen}
+        product={selectedProduct}
+      />
+
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>History Adjustment Stok</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <StockHistory
+              productId={selectedProduct.id}
+              productName={selectedProduct.name}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
