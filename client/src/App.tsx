@@ -46,11 +46,17 @@ function MainLayout() {
 }
 
 function App() {
-  const { initialize, isAuthenticated } = useAuthStore();
+  const { initialize, isAuthenticated, token } = useAuthStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    if (token) {
+      queryClient.invalidateQueries();
+    }
+  }, [token]);
 
   return (
     <QueryClientProvider client={queryClient}>

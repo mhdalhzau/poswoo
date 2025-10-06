@@ -1,16 +1,14 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-function getAuthToken(): string | null {
+export function getAuthToken(): string | null {
   try {
     const authData = localStorage.getItem('dreampos-auth');
     if (authData) {
       const parsed = JSON.parse(authData);
-      // Try different paths where token might be stored
-      return parsed.state?.token || parsed.token || null;
+      return parsed.state?.token || null;
     }
   } catch (e) {
     console.error('Error getting auth token:', e);
-    return null;
   }
   return null;
 }

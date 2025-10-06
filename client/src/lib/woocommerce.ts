@@ -1,8 +1,27 @@
-import { apiRequest } from './queryClient';
+import { apiRequest, getAuthToken } from './queryClient';
 import type { WooCommerceProduct, WooCommerceCustomer, WooCommerceOrder } from '@/types/woocommerce';
 
 export class WooCommerceClient {
   private baseUrl = '/api';
+
+  private async authFetch(url: string, options?: RequestInit): Promise<Response> {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+      ...((options?.headers as Record<string, string>) || {}),
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+    
+    return response;
+  }
 
   async getProducts(params?: {
     search?: string;
@@ -16,19 +35,19 @@ export class WooCommerceClient {
     if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
     if (params?.page) searchParams.set('page', params.page.toString());
 
-    const response = await fetch(`${this.baseUrl}/products?${searchParams}`);
+    const response = await this.authFetch(`${this.baseUrl}/products?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch products');
     return response.json();
   }
 
   async getProduct(id: number): Promise<WooCommerceProduct> {
-    const response = await fetch(`${this.baseUrl}/products/${id}`);
+    const response = await this.authFetch(`${this.baseUrl}/products/${id}`);
     if (!response.ok) throw new Error('Failed to fetch product');
     return response.json();
   }
 
   async searchProductByBarcode(code: string): Promise<WooCommerceProduct> {
-    const response = await fetch(`${this.baseUrl}/products/search/barcode/${code}`);
+    const response = await this.authFetch(`${this.baseUrl}/products/search/barcode/${code}`);
     if (!response.ok) throw new Error('Product not found');
     return response.json();
   }
@@ -43,7 +62,7 @@ export class WooCommerceClient {
     if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
     if (params?.page) searchParams.set('page', params.page.toString());
 
-    const response = await fetch(`${this.baseUrl}/customers?${searchParams}`);
+    const response = await this.authFetch(`${this.baseUrl}/customers?${searchParams}`);
     if (!response.ok) throw new Error('Failed to fetch customers');
     return response.json();
   }
@@ -55,13 +74,13 @@ export class WooCommerceClient {
 
   async getOrders(limit?: number): Promise<any[]> {
     const params = limit ? `?limit=${limit}` : '';
-    const response = await fetch(`${this.baseUrl}/orders${params}`);
+    const response = await this.authFetch(`${this.baseUrl}/orders${params}`);
     if (!response.ok) throw new Error('Failed to fetch orders');
     return response.json();
   }
 
   async getOrder(id: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/orders/${id}`);
+    const response = await this.authFetch(`${this.baseUrl}/orders/${id}`);
     if (!response.ok) throw new Error('Failed to fetch order');
     return response.json();
   }
@@ -78,7 +97,7 @@ export class WooCommerceClient {
     totalCustomers: number;
     lowStockProducts: number;
   }> {
-    const response = await fetch(`${this.baseUrl}/dashboard/stats`);
+    const response = await this.authFetch(`${this.baseUrl}/dashboard/stats`);
     if (!response.ok) throw new Error('Failed to fetch dashboard stats');
     return response.json();
   }
@@ -98,7 +117,7 @@ export class WooCommerceClient {
   }
 
   async getSettings(): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/settings`);
+    const response = await this.authFetch(`${this.baseUrl}/settings`);
     if (!response.ok) throw new Error('Failed to fetch settings');
     return response.json();
   }
