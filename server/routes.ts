@@ -311,18 +311,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update product stock in WooCommerce
+  app.put("/api/products/:id/stock", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { quantity } = req.body;
+      
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const updatedProduct = await wc.put(`/products/${id}`, {
+        stock_quantity: quantity,
+      });
+
+      // Update cache
+      await storage.updateCachedProduct(parseInt(id), {
+        stockQuantity: updatedProduct.stock_quantity,
+        stockStatus: updatedProduct.stock_status,
+        updatedAt: new Date(),
+      });
+
+      res.json(updatedProduct);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update product stock', error: error.message });
+    }
+  });
+
   // Customer routes
   app.get("/api/customers", requireAuth, async (req, res) => {
     try {
-      const { search, per_page = 20 } = req.query;
+      const { search, per_page = 20, page = 1 } = req.query;
       
       let customers = search ? 
         await storage.searchCachedCustomers(search as string) : 
         await storage.getCachedCustomers(parseInt(per_page as string));
 
+      // If cache is empty, fetch from WooCommerce
+      if (customers.length === 0) {
+        const settings = await storage.getPosSettings();
+        if (settings) {
+          try {
+            const wc = new WooCommerceAPI({
+              url: settings.storeUrl,
+              consumerKey: settings.consumerKey,
+              consumerSecret: settings.consumerSecret,
+            });
+
+            const wcCustomers = await wc.get('/customers', {
+              search,
+              per_page,
+              page,
+            });
+
+            // Cache the customers
+            const cachedCustomers = wcCustomers.map((customer: any) => ({
+              id: customer.id,
+              email: customer.email,
+              firstName: customer.first_name,
+              lastName: customer.last_name,
+              username: customer.username,
+              billing: customer.billing,
+              shipping: customer.shipping,
+              avatarUrl: customer.avatar_url,
+              totalSpent: customer.total_spent,
+              ordersCount: customer.orders_count,
+              lastSyncAt: new Date(),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }));
+
+            await storage.setCachedCustomers(cachedCustomers);
+            customers = cachedCustomers;
+          } catch (error) {
+            console.error('Failed to fetch customers from WooCommerce:', error);
+          }
+        }
+      }
+
       res.json(customers);
     } catch (error) {
       res.status(500).json({ message: 'Failed to get customers', error: error.message });
+    }
+  });
+
+  // Create customer in WooCommerce
+  app.post("/api/customers", requireAuth, async (req, res) => {
+    try {
+      const { email, firstName, lastName, phone, billing, shipping } = req.body;
+      
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      const customerData = {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        billing: billing || {
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone || '',
+        },
+        shipping: shipping || {
+          first_name: firstName,
+          last_name: lastName,
+        },
+      };
+
+      const wcCustomer = await wc.post('/customers', customerData);
+
+      // Cache the new customer
+      const cachedCustomer = {
+        id: wcCustomer.id,
+        email: wcCustomer.email,
+        firstName: wcCustomer.first_name,
+        lastName: wcCustomer.last_name,
+        username: wcCustomer.username,
+        billing: wcCustomer.billing,
+        shipping: wcCustomer.shipping,
+        avatarUrl: wcCustomer.avatar_url,
+        totalSpent: wcCustomer.total_spent,
+        ordersCount: wcCustomer.orders_count,
+        lastSyncAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.setCachedCustomer(cachedCustomer);
+
+      res.json(wcCustomer);
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create customer', error: error.message });
     }
   });
 
