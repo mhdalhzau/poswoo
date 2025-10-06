@@ -557,6 +557,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync products from WooCommerce
+  app.post("/api/products/sync", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      let allProducts: any[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const wcProducts = await wc.get('/products', {
+          per_page: 100,
+          page,
+          status: 'publish',
+        });
+
+        if (wcProducts.length === 0) {
+          hasMore = false;
+        } else {
+          allProducts = allProducts.concat(wcProducts);
+          page++;
+          if (wcProducts.length < 100) {
+            hasMore = false;
+          }
+        }
+      }
+
+      const cachedProducts = allProducts.map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        sku: product.sku,
+        price: product.price,
+        regularPrice: product.regular_price,
+        salePrice: product.sale_price,
+        onSale: product.on_sale,
+        status: product.status,
+        stockStatus: product.stock_status,
+        stockQuantity: product.stock_quantity,
+        manageStock: product.manage_stock,
+        categories: product.categories,
+        images: product.images,
+        weight: product.weight,
+        dimensions: product.dimensions,
+        shortDescription: product.short_description,
+        description: product.description,
+        lastSyncAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      await storage.setCachedProducts(cachedProducts);
+
+      res.json({ 
+        success: true, 
+        message: `Synced ${cachedProducts.length} products from WooCommerce`,
+        count: cachedProducts.length 
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to sync products', error: error.message });
+    }
+  });
+
+  // Sync customers from WooCommerce
+  app.post("/api/customers/sync", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getPosSettings();
+      if (!settings) {
+        return res.status(400).json({ message: 'WooCommerce settings not configured' });
+      }
+
+      const wc = new WooCommerceAPI({
+        url: settings.storeUrl,
+        consumerKey: settings.consumerKey,
+        consumerSecret: settings.consumerSecret,
+      });
+
+      let allCustomers: any[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const wcCustomers = await wc.get('/customers', {
+          per_page: 100,
+          page,
+        });
+
+        if (wcCustomers.length === 0) {
+          hasMore = false;
+        } else {
+          allCustomers = allCustomers.concat(wcCustomers);
+          page++;
+          if (wcCustomers.length < 100) {
+            hasMore = false;
+          }
+        }
+      }
+
+      const cachedCustomers = allCustomers.map((customer: any) => ({
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.first_name,
+        lastName: customer.last_name,
+        username: customer.username,
+        billing: customer.billing,
+        shipping: customer.shipping,
+        avatarUrl: customer.avatar_url,
+        totalSpent: customer.total_spent,
+        ordersCount: customer.orders_count,
+        lastSyncAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      await storage.setCachedCustomers(cachedCustomers);
+
+      res.json({ 
+        success: true, 
+        message: `Synced ${cachedCustomers.length} customers from WooCommerce`,
+        count: cachedCustomers.length 
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to sync customers', error: error.message });
+    }
+  });
+
   // Sync unsynced orders to WooCommerce
   app.post("/api/orders/sync", requireAuth, async (req, res) => {
     try {
